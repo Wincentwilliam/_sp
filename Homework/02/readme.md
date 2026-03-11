@@ -1,4 +1,4 @@
-# Project: MiniLang Compiler & VM
+# Homework 2 : MiniLang Compiler & VM
 
 ### 1. Design Goals
 MiniLang is a simple imperative language designed to demonstrate the core concepts of a compiler: lexical analysis, parsing into an Abstract Syntax Tree (AST), bytecode generation, and execution via a virtual machine.
