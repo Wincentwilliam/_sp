@@ -1,0 +1,10 @@
+program    = { statement } ;
+statement  = let_decl | assignment | if_stmt | while_stmt | print_stmt ;
+let_decl   = "let" identifier "=" expression ";" ;
+assignment = identifier "=" expression ";" ;
+if_stmt    = "if" "(" expression ")" "{" { statement } "}" ;
+while_stmt = "while" "(" expression ")" "{" { statement } "}" ;
+print_stmt = "print" "(" expression ")" ";" ;
+expression = term { ("+" | "-" | "<" | ">") term } ;
+term       = factor { ("*" | "/") factor } ;
+factor     = identifier | number | "(" expression ")" ;
