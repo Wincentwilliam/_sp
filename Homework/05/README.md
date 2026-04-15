@@ -1,5 +1,7 @@
 # Linux Multi-Threading Assignment
 
+--
+**Note:** This README.md 80% is build by OpenCode and 20% by myself (洪偉升).
 ---
 
 ## Section 1: Theoretical Concepts Documentation
@@ -279,7 +281,3 @@ Philosopher 0 is EATING
 ---
 
 **Note:** This code targets Linux POSIX threads. On Windows, you would need a POSIX emulation layer (like MSYS2) or Windows-specific threading APIs.
-
----
-
-**Note:** This README.md 80% is build by OpenCode and 20% by myself (洪偉升).
