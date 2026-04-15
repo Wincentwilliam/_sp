@@ -1,6 +1,6 @@
 # Linux Multi-Threading Assignment
 
---
+---
 **Note:** This README.md 80% is build by OpenCode and 20% by myself (洪偉升).
 ---
 
