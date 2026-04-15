@@ -1,4 +1,5 @@
-# 第五章：LLVM 中間表示層 (IR) (LLVM Intermediate Representation)
+# 第五章：LLVM 中間表示層 (IR)
+## LLVM Intermediate Representation
 
 ---
 
@@ -6,285 +7,561 @@
 
 ---
 
-## 5.1 Understanding LLVM IR
+<div align="center">
 
-LLVM IR (Intermediate Representation) is the core of the LLVM project. It is a typed, RISC-like instruction set that serves as the common language between compiler frontends and backends.
+![Chapter 5](https://img.shields.io/badge/Chapter-5-4CAF50?style=for-the-badge)
+![Level](https://img.shields.io/badge/Level-Advanced-2196F3?style=for-the-badge)
+![Duration](https://img.shields.io/badge/Duration-2%20weeks-FF9800?style=for-the-badge)
 
-### 5.1.1 IR Design Goals
+*Mastering LLVM IR Generation*
 
-| Goal | Description |
-|------|-------------|
-| **Low-level** | Close to machine operations |
-| **Typed** | Every value has a well-defined type |
-| **SSA form** | Static Single Assignment for easy optimization |
-| **Hierarchy** | Structured control flow with basic blocks |
-| **Extensible** | Metadata and attributes |
+</div>
 
-### 5.1.2 IR Characteristics
+---
+
+## Table of Contents
+
+1. [Introduction to LLVM IR](#51-introduction-to-llvm-ir)
+2. [LLVM IR Structure](#52-llvm-ir-structure)
+3. [LLVM IR Type System](#53-llvm-ir-type-system)
+4. [LLVM IR Instructions](#54-llvm-ir-instructions)
+5. [SSA Form and Phi Nodes](#55-ssa-form-and-phi-nodes)
+6. [Generating LLVM IR from AST](#56-generating-llvm-ir-from-ast)
+7. [Working with LLVM IR](#57-working-with-llvm-ir)
+8. [Optimization with opt](#58-optimization-with-opt)
+9. [Summary](#59-summary)
+10. [Exercises](#510-exercises)
+
+---
+
+## 5.1 Introduction to LLVM IR
+
+LLVM IR (Intermediate Representation) is the typed, RISC-like instruction set that serves as the common language between compiler frontends and backends. It is designed to be simultaneously:
+
+- **High-level enough** to express source language constructs
+- **Low-level enough** to map efficiently to machine instructions
+- **SSA form** for easy optimization
+- **Target-independent** for multiple platform support
+
+### 5.1.1 LLVM IR Design Principles
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                    LLVM IR DESIGN PRINCIPLES                             │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   1. STRONG TYPING                                                    │
+│      • Every value has a well-defined type                              │
+│      • Type-safe operations and conversions                             │
+│      • Enables aggressive optimization                                   │
+│                                                                        │
+│   2. SSA FORM (Static Single Assignment)                               │
+│      • Each variable assigned exactly once                               │
+│      • Phi nodes handle control flow merges                             │
+│      • Simplifies data flow analysis                                    │
+│                                                                        │
+│   3. RISC-LIKE INSTRUCTIONS                                            │
+│      • Simple, few instruction types                                    │
+│      • Three-address code format                                        │
+│      • Unlimited virtual registers                                       │
+│                                                                        │
+│   4. HIERARCHICAL STRUCTURE                                            │
+│      • Module → Function → Basic Block → Instruction                    │
+│      • Mirrors program organization                                      │
+│      • Enables structured optimization                                   │
+│                                                                        │
+│   5. PLATFORM INDEPENDENCE                                             │
+│      • No target-specific constructs                                    │
+│      • Same IR for any source and target                                │
+│      • Enables cross-platform optimization                              │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5.2 LLVM IR Structure
+
+### 5.2.1 Module Organization
 
 ```llvm
-; LLVM IR Example
-; factorial.ll
+; ===================================================================
+; LLVM IR MODULE STRUCTURE
+; ===================================================================
 
-; Global variable
-@global_var = global i32 0
+; ┌──────────────────────────────────────────────────────────────────┐
+; │                      MODULE HEADER                                │
+; │                                                                  │
+; │  ; Module name                                                   │
+; │  ; Target triple (architecture, vendor, OS)                       │
+; │  ; Data layout (endianness, pointer size, etc.)                   │
+; │                                                                  │
+; │  target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"     │
+; │  target triple = "x86_64-pc-linux-gnu"                           │
+; └──────────────────────────────────────────────────────────────────┘
 
-; Function declaration
-declare i32 @printf(i8* %format, ...)
+; ┌──────────────────────────────────────────────────────────────────┐
+; │                   GLOBAL VARIABLES                                 │
+; │                                                                  │
+; │  @global_var = global i32 0                                      │
+; │  @constant_str = constant [13 x i8] c"Hello World\00"           │
+; │  @external_var = external global i32                              │
+; └──────────────────────────────────────────────────────────────────┘
 
-; Function definition with metadata
-define i32 @factorial(i32 %n) #0 {
+; ┌──────────────────────────────────────────────────────────────────┐
+; │                   FUNCTION DEFINITIONS                            │
+; │                                                                  │
+; │  define i32 @main() {                                            │
+; │  entry:                                                          │
+; │    ret i32 0                                                     │
+; │  }                                                               │
+; └──────────────────────────────────────────────────────────────────┘
+
+; ┌──────────────────────────────────────────────────────────────────┐
+; │                   FUNCTION DECLARATIONS                           │
+; │                                                                  │
+; │  declare i32 @printf(i8* %format, ...)                          │
+; │  declare void @exit(i32 %status)                                 │
+; └──────────────────────────────────────────────────────────────────┘
+```
+
+### 5.2.2 Complete Module Example
+
+```llvm
+; ===================================================================
+; factorial.ll - Complete LLVM IR Module
+; ===================================================================
+
+; Module-level declarations
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-pc-linux-gnu"
+
+; Global variables
+@.str_format = private constant [4 x i8] c"%d\0A\00"
+@global_init = global i32 42
+
+; ===================================================================
+; Function: factorial (int) -> int
+; ===================================================================
+define i32 @factorial(i32 %n) {
 entry:
-  %cmp = icmp sle i32 %n, 1
-  br i1 %cmp, label %return_base, label %recurse
+    ; Compare n <= 1
+    %cmp = icmp sle i32 %n, 1
+    
+    ; Conditional branch
+    br i1 %cmp, label %base_case, label %recursive_case
 
-return_base:
-  ret i32 1
+base_case:
+    ; Return 1 for base case
+    ret i32 1
 
-recurse:
-  %dec = sub i32 %n, 1
-  %rec_result = call i32 @factorial(i32 %dec)
-  %result = mul i32 %n, %rec_result
-  ret i32 %result
+recursive_case:
+    ; Calculate n - 1
+    %n_minus_1 = sub i32 %n, 1
+    
+    ; Recursive call
+    %recursive_result = call i32 @factorial(i32 %n_minus_1)
+    
+    ; Multiply n * factorial(n-1)
+    %result = mul i32 %n, %recursive_result
+    
+    ret i32 %result
 }
 
-; Function with attributes
-define i32 @main() #0 {
+; ===================================================================
+; Function: main () -> int
+; ===================================================================
+define i32 @main() {
 entry:
-  %result = call i32 @factorial(i32 5)
-  ret i32 %result
+    ; Call factorial(5)
+    %result = call i32 @factorial(i32 5)
+    
+    ; Print result using printf
+    %fmt_ptr = getelementptr inbounds [4 x i8], [4 x i8]* @.str_format, i64 0, i64 0
+    %call = call i32 @printf(i8* %fmt_ptr, i32 %result)
+    
+    ret i32 0
 }
 
-attributes #0 = { nounwind "frame-pointer"="none" }
+; ===================================================================
+; Function: factorial_iterative (int) -> int
+; ===================================================================
+define i32 @factorial_iter(i32 %n) {
+entry:
+    ; Allocate stack space for accumulator and counter
+    %acc_ptr = alloca i32
+    %counter_ptr = alloca i32
+    
+    ; Initialize accumulator to 1
+    store i32 1, i32* %acc_ptr
+    
+    ; Initialize counter to n
+    store i32 %n, i32* %counter_ptr
+    
+    ; Jump to loop condition
+    br label %loop_cond
+
+loop_cond:
+    ; Load counter
+    %counter = load i32, i32* %counter_ptr
+    
+    ; Check if counter > 0
+    %continue = icmp sgt i32 %counter, 0
+    br i1 %continue, label %loop_body, label %loop_exit
+
+loop_body:
+    ; Load accumulator
+    %acc = load i32, i32* %acc_ptr
+    
+    ; acc = acc * counter
+    %new_acc = mul i32 %acc, %counter
+    store i32 %new_acc, i32* %acc_ptr
+    
+    ; counter = counter - 1
+    %new_counter = sub i32 %counter, 1
+    store i32 %new_counter, i32* %counter_ptr
+    
+    br label %loop_cond
+
+loop_exit:
+    ; Load final result
+    %result = load i32, i32* %acc_ptr
+    ret i32 %result
+}
 ```
 
-## 5.2 LLVM IR Type System
+---
 
-### 5.2.1 Primitive Types
+## 5.3 LLVM IR Type System
 
-| Type | Width | Description |
-|------|-------|-------------|
-| `void` | 0 | No value |
-| `i1` | 1 bit | Boolean |
-| `i8` | 8 bits | Byte |
-| `i16` | 16 bits | Half word |
-| `i32` | 32 bits | Word |
-| `i64` | 64 bits | Double word |
-| `half` | 16 bits | Half precision float |
-| `float` | 32 bits | Single precision float |
-| `double` | 64 bits | Double precision float |
-| `fp128` | 128 bits | Quad precision float |
-| `x86_fp80` | 80 bits | x86 extended precision |
-| `ppc_fp128` | 128 bits | PowerPC 128-bit |
+### 5.3.1 Type Hierarchy
 
-### 5.2.2 Aggregate Types
-
-```llvm
-; Array type
-[10 x i32]          ; Array of 10 32-bit integers
-[3 x [4 x i32]]     ; 2D array: 3 rows of 4 integers
-
-; Vector type (SIMD)
-<4 x float>         ; 4-element float vector
-<8 x i32>          ; 8-element integer vector
-
-; Structure type
-%struct.Point = type { i32, i32 }           ; Anonymous struct
-%Point = type { i32, i32 }
-%Node = type { i32, %Node* }                ; Self-referential (linked list)
-
-; Pointer type
-i32*                 ; Pointer to i32
-<4 x float>*         ; Pointer to float vector
-%struct.Node**       ; Pointer to pointer to Node
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      LLVM IR TYPE HIERARCHY                            │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│                              Type                                       │
+│                                │                                        │
+│         ┌─────────────────────┼─────────────────────┐                │
+│         │                     │                     │                    │
+│    Primitive             Aggregate             Function                │
+│         │                     │                     │                    │
+│    ┌────┴────┐           ┌────┴────┐              │                    │
+│    │         │           │         │         ┌─────┴─────┐             │
+│    ▼         ▼           ▼         ▼         │           │             │
+│  void       Integer    Array     Struct   Return     Parameters      │
+│  floating   (i1,i8,    [N x T]   {T1,T2}    Type         │             │
+│  (f16,f32,  i16,i32,                        │              │             │
+│   f64,f128) i64,i128)                      └──────────────┘             │
+│                                                                        │
+│  ───────────────────────────────────────────────────────────────────  │
+│                                                                        │
+│  INTEGER TYPES:                                                        │
+│  ┌──────┬──────────────────────────────────────────────────────┐     │
+│  │  i1  │  1-bit (boolean)                                     │     │
+│  │  i8  │  8-bit (byte, char)                                 │     │
+│  │  i16 │  16-bit (half word)                                 │     │
+│  │  i32 │  32-bit (word, int)                                │     │
+│  │  i64 │  64-bit (double word, long)                        │     │
+│  └──────┴──────────────────────────────────────────────────────┘     │
+│                                                                        │
+│  FLOATING-POINT TYPES:                                                │
+│  ┌──────────┬────────────────────────────────────────────────┐      │
+│  │  half    │  16-bit IEEE 754 half precision                 │      │
+│  │  float   │  32-bit IEEE 754 single precision               │      │
+│  │  double  │  64-bit IEEE 754 double precision                │      │
+│  │  fp128   │  128-bit quadruple precision                    │      │
+│  └──────────┴────────────────────────────────────────────────┘      │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2.3 Function Types
+### 5.3.2 Type Examples
 
 ```llvm
-; (return_type)(arg1_type, arg2_type, ...)
-i32 (i32, i32)              ; Function returning i32, taking two i32s
-i32 (i32*)                  ; Function returning i32, taking pointer to i32
-void (i8*)                  ; Function returning void
-i32 (...)                   ; Varargs function
+; Primitive types
+i32                      ; 32-bit integer
+i64                      ; 64-bit integer
+float                    ; 32-bit floating point
+double                   ; 64-bit floating point
+i8*                      ; Pointer to 8-bit integer
+
+; Array types
+[10 x i32]              ; Array of 10 32-bit integers
+[3 x [4 x i32]]         ; 2D array: 3x4 matrix
+[100 x i8]              ; Byte array (string buffer)
+
+; Structure types
+%Point = type { i32, i32 }                    ; Anonymous struct
+%Rect = type { %Point, %Point }                ; Using defined types
+%Node = type { i32, %Node* }                  ; Self-referential (linked list)
+
+; Vector types (SIMD)
+<4 x float>             ; 4-element float vector (SSE)
+<8 x i32>              ; 8-element integer vector (AVX)
+<16 x i8>              ; 16-element byte vector
+
+; Pointer types
+i32*                    ; Pointer to i32
+<4 x float>*           ; Pointer to float vector
+i8**                   ; Pointer to pointer to i8
+
+; Function types
+i32 (i32, i32)         ; Function returning i32, taking two i32s
+void (i8*)              ; Function returning void, taking i8*
+i32 (i32, ...)          ; Varargs function
 ```
 
-## 5.3 LLVM IR Instructions
+---
 
-### 5.3.1 Binary Instructions
+## 5.4 LLVM IR Instructions
+
+### 5.4.1 Instruction Categories
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   LLVM IR INSTRUCTION CATEGORIES                       │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐   │
+│   │                      BINARY INSTRUCTIONS                       │   │
+│   │                                                              │   │
+│   │   add  i32  %result, %a, %b        ; Integer addition       │   │
+│   │   fadd float %result, %a, %b      ; FP addition            │   │
+│   │   sub, mul, sdiv, udiv, srem, urem                         │   │
+│   │   fdiv, frem (floating point)                               │   │
+│   └──────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐   │
+│   │                   BITWISE INSTRUCTIONS                        │   │
+│   │                                                              │   │
+│   │   and  i32  %result, %a, %b        ; Bitwise AND          │   │
+│   │   or   i32  %result, %a, %b        ; Bitwise OR           │   │
+│   │   xor  i32  %result, %a, %b        ; Bitwise XOR          │   │
+│   │   shl  i32  %result, %a, %b        ; Shift left           │   │
+│   │   lshr i32  %result, %a, %b        ; Logical shift right   │   │
+│   │   ashr i32  %result, %a, %b        ; Arithmetic shift right│   │
+│   └──────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐   │
+│   │                   MEMORY INSTRUCTIONS                         │   │
+│   │                                                              │   │
+│   │   alloca i32                         ; Stack allocation       │   │
+│   │   load i32, i32* %ptr              ; Load from memory       │   │
+│   │   store i32 %val, i32* %ptr        ; Store to memory       │   │
+│   │   getelementptr i32, i32* %ptr, i32 1 ; Address calculation │   │
+│   └──────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+│   ┌──────────────────────────────────────────────────────────────┐   │
+│   │                   CONTROL FLOW INSTRUCTIONS                   │   │
+│   │                                                              │   │
+│   │   br label %dest                     ; Unconditional branch │   │
+│   │   br i1 %cond, label %then, label %else ; Conditional     │   │
+│   │   ret i32 %val                        ; Return value        │   │
+│   │   ret void                            ; Return void         │   │
+│   │   switch i32 %val, label %default [...] ; Multi-way branch │   │
+│   │   call i32 @func(i32 %arg)          ; Function call        │   │
+│   └──────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 5.4.2 Complete Instruction Reference
+
+#### Arithmetic Instructions
 
 ```llvm
-; Arithmetic operations
-%sum = add i32 %a, %b           ; Addition
-%dif = sub i32 %a, %b           ; Subtraction
-%prod = mul i32 %a, %b          ; Multiplication
-%quot = sdiv i32 %a, %b         ; Signed division
-%rem = srem i32 %a, %b          ; Signed remainder
-%and = and i32 %a, %b           ; Bitwise AND
-%or = or i32 %a, %b             ; Bitwise OR
-%xor = xor i32 %a, %b           ; Bitwise XOR
-%shl = shl i32 %a, %b           ; Shift left
-%lshr = lshr i32 %a, %b        ; Logical shift right
-%ashr = ashr i32 %a, %b        ; Arithmetic shift right
+; Integer arithmetic
+%sum = add i32 %a, %b              ; a + b
+%dif = sub i32 %a, %b              ; a - b
+%prod = mul i32 %a, %b             ; a * b
+%quot = sdiv i32 %a, %b            ; Signed division (a / b)
+%quot = udiv i32 %a, %b           ; Unsigned division
+%rem = srem i32 %a, %b            ; Signed remainder
+%rem = urem i32 %a, %b             ; Unsigned remainder
+
+; With overflow flags
+%result = add nuw i32 %a, %b       ; No unsigned wrap
+%result = add nsw i32 %a, %b       ; No signed wrap
+%result = add nuw nsw i32 %a, %b  ; Both flags
 
 ; Floating-point arithmetic
-%fadd = fadd float %a, %b      ; FP addition
-%fsub = fsub float %a, %b      ; FP subtraction
-%fmul = fmul float %a, %b      ; FP multiplication
-%fdiv = fdiv float %a, %b      ; FP division
-%frem = frem float %a, %b      ; FP remainder
+%fadd = fadd float %a, %b         ; a + b
+%fsub = fsub float %a, %b         ; a - b
+%fmul = fmul float %a, %b         ; a * b
+%fdiv = fdiv float %a, %b         ; a / b
+%frem = frem float %a, %b         ; a % b (FP remainder)
 ```
 
-### 5.3.2 Comparison Instructions
+#### Comparison Instructions
 
 ```llvm
-; Integer comparisons
-%eq = icmp eq i32 %a, %b        ; Equal
-%ne = icmp ne i32 %a, %b       ; Not equal
-%ugt = icmp ugt i32 %a, %b     ; Unsigned greater than
-%uge = icmp uge i32 %a, %b     ; Unsigned greater or equal
-%ult = icmp ult i32 %a, %b     ; Unsigned less than
-%ule = icmp ule i32 %a, %b     ; Unsigned less or equal
-%sgt = icmp sgt i32 %a, %b     ; Signed greater than
-%sge = icmp sge i32 %a, %b     ; Signed greater or equal
-%slt = icmp slt i32 %a, %b     ; Signed less than
-%sle = icmp sle i32 %a, %b     ; Signed less or equal
+; Integer comparisons (icmp)
+%eq = icmp eq i32 %a, %b          ; Equal (==)
+%ne = icmp ne i32 %a, %b          ; Not equal (!=)
+%ugt = icmp ugt i32 %a, %b       ; Unsigned greater than
+%uge = icmp uge i32 %a, %b       ; Unsigned >=
+%ult = icmp ult i32 %a, %b       ; Unsigned less than
+%ule = icmp ule i32 %a, %b       ; Unsigned <=
+%sgt = icmp sgt i32 %a, %b       ; Signed greater than
+%sge = icmp sge i32 %a, %b       ; Signed >=
+%slt = icmp slt i32 %a, %b        ; Signed less than
+%sle = icmp sle i32 %a, %b        ; Signed <=
 
-; Floating-point comparisons
-%foeq = fcmp oeq float %a, %b  ; Ordered equal
-%fogt = fcmp ogt float %a, %b ; Ordered greater than
-%fone = fcmp one float %a, %b  ; Ordered not equal
-%funo = fcmp uno float %a, %b ; Unordered (NaN involved)
+; Floating-point comparisons (fcmp)
+%oeq = fcmp oeq float %a, %b     ; Ordered equal
+%one = fcmp one float %a, %b     ; Ordered not equal
+%ogt = fcmp ogt float %a, %b     ; Ordered greater than
+%oge = fcmp oge float %a, %b    ; Ordered >=
+%olt = fcmp olt float %a, %b     ; Ordered less than
+%ole = fcmp ole float %a, %b     ; Ordered <=
+%uno = fcmp uno float %a, %b     ; Unordered (NaN-aware)
 ```
 
-### 5.3.3 Memory Instructions
+#### Memory Instructions
 
 ```llvm
-; Alloca - stack allocation
-%ptr = alloca i32              ; Allocate one i32 on stack
-%arr = alloca i32, i32 10      ; Allocate array of 10 i32s
+; Stack allocation
+%ptr = alloca i32                          ; Allocate one i32
+%ptr = alloca i32, align 4                ; With alignment
+%arr = alloca i32, i32 100                ; Allocate array of 100 i32s
+%ptr = alloca i32, i32 %size              ; Variable-size array
 
-; Load and Store
-%val = load i32, i32* %ptr      ; Load i32 from pointer
-store i32 %val, i32* %ptr       ; Store i32 to pointer
+; Load and store
+%val = load i32, i32* %ptr                ; Load i32 from pointer
+%val = load volatile i32, i32* %ptr       ; Volatile (hardware access)
+%val = load i32, i32* %ptr, align 4       ; With alignment
+store i32 %val, i32* %ptr                 ; Store value to pointer
+store volatile i32 %val, i32* %ptr         ; Volatile store
+store i32 %val, i32* %ptr, align 4          ; With alignment
 
-; GetElementPtr - indexing into aggregates
-%node = load %Node*, %Node** @head
-%next = getelementptr %Node, %Node* %node, i32 1   ; Point to next
-%field = getelementptr %Node, %Node* %node, i32 0, i32 1  ; Second field
+; GetElementPtr (GEP) - struct/array indexing
+%ptr = getelementptr i32, i32* %arr, i32 %idx        ; arr[idx]
+%ptr = getelementptr [10 x i32], [10 x i32]* %arr, i32 0, i32 %idx  ; Array
+%ptr = getelementptr %Node, %Node* %node, i32 1      ; node->next
+%ptr = getelementptr %Struct, %Struct* %s, i32 0, i32 1 ; s->field1
 
-; Bitcast
-%intptr = ptrtoint i32* %ptr to i64
-%newptr = inttoptr i64 %intptr to i32*
+; Type conversions
+%intptr = ptrtoint i32* %ptr to i64        ; Pointer to integer
+%ptr = inttoptr i64 %intptr to i32*        ; Integer to pointer
+%float = fptrunc double %d to float         ; FP narrowing
+%d = fpext float %f to double              ; FP widening
+%i = fptosi float %f to i32               ; FP to signed int
+%f = sitofp i32 %i to float              ; Signed int to FP
 ```
 
-### 5.3.4 Control Flow Instructions
+---
+
+## 5.5 SSA Form and Phi Nodes
+
+### 5.5.1 The Problem: Control Flow Merges
+
+In SSA form, each variable is assigned exactly once. This creates a challenge when control flow paths merge:
 
 ```llvm
-; Unconditional branch
-br label %dest
-
-; Conditional branch
-%cmp = icmp ne i32 %a, 0
-br i1 %cmp, label %then, label %else
-
-; Indirect branch
-switch i32 %val, label %default [
-  i32 0, label %zero
-  i32 1, label %one
-  i32 2, label %two
-]
-
-; Function call
-%result = call i32 @function(i32 %arg1, i32 %arg2)
-call void @printf(i8* getelementptr([6 x i8], [6 x i8]* @.str, i32 0, i32 0))
-
-; Return
-ret i32 %val
-ret void
-
-; Invoke (with exception handling)
-%result = invoke i32 @might_throw(i32 %arg)
-        to label %normal continuation
-        unwind label %exception
+; Problem: Which value of %x should we use after the merge?
+;
+; Without SSA (conceptual, invalid IR):
+;     %x = ...        ; First assignment
+;     br condition, %then, %else
+; then:
+;     %x = ...        ; Second assignment - problem!
+;     br %merge
+; else:
+;     %x = ...        ; Third assignment - problem!
+;     br %merge
+; merge:
+;     use %x          ; Which %x?
 ```
 
-## 5.4 SSA Form and Phi Nodes
-
-LLVM IR uses Static Single Assignment (SSA) form, where each variable is assigned exactly once.
-
-### 5.4.1 Why SSA?
-
-Without SSA, a simple if-else would cause problems:
+### 5.5.2 Phi Nodes: The Solution
 
 ```llvm
-; WITHOUT SSA (invalid LLVM IR)
+; Solution: Phi node selects value based on predecessor
+;
+; With proper SSA:
 entry:
-  %x = ...
-  br condition, label %then, label %else
+    %cond = icmp ...
+    br i1 %cond, label %then, label %else
 
 then:
-  %x = add i32 %x, 1    ; Reassignment of x!
-  br label %merge
+    %x.then = add i32 %a, 1     ; x = a + 1
+    br label %merge
 
 else:
-  %x = sub i32 %x, 1    ; Another reassignment!
-  br label %merge
+    %x.else = sub i32 %a, 1     ; x = a - 1
+    br label %merge
 
 merge:
-  ; Which x should we use here?
-  use i32 %x
+    ; Phi node: select x based on where we came from
+    %x = phi i32 [%x.then, %then], [%x.else, %else]
+    ; Now %x has the correct value
+    %result = mul i32 %x, 2
 ```
 
-### 5.4.2 Phi Nodes
-
-Phi nodes select a value based on the control flow predecessor:
-
-```llvm
-; WITH SSA (correct LLVM IR)
-entry:
-  %x = ...
-  br label %then
-
-then:
-  %x.then = add i32 %x, 1
-  br label %merge
-
-else:
-  %x.else = sub i32 %x, 1
-  br label %merge
-
-merge:
-  %x = phi i32 [%x.then, %then], [%x.else, %else]
-  ; Now %x has the correct value based on where we came from
-  use i32 %x
-```
-
-### 5.4.3 Phi Node Semantics
+### 5.5.3 Phi Node Semantics
 
 ```
-phi [value1, block1], [value2, block2], ...
-
-The value chosen is the one corresponding to the block
-from which control flow reached this point.
+┌────────────────────────────────────────────────────────────────────────┐
+│                         PHI NODE SEMANTICS                              │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│   φ(v1, block1, v2, block2, ...)                                     │
+│                                                                        │
+│   The phi node returns:                                              │
+│   • v1 if control came from block1                                   │
+│   • v2 if control came from block2                                   │
+│   • ...                                                              │
+│                                                                        │
+│   ┌───────────────────────────────────────────────────────────────┐   │
+│   │                                                               │   │
+│   │                     ┌─────────────┐                          │   │
+│   │                     │  entry      │                          │   │
+│   │                     └──────┬──────┘                          │   │
+│   │                            │                                   │   │
+│   │               ┌────────────┼────────────┐                     │   │
+│   │               │                         │                     │   │
+│   │               ▼                         ▼                     │   │
+│   │       ┌───────────────┐         ┌───────────────┐            │   │
+│   │       │     then      │         │     else      │            │   │
+│   │       │               │         │               │            │   │
+│   │       │  %x.then = 1 │         │  %x.else = 2  │            │   │
+│   │       └───────┬───────┘         └───────┬───────┘            │   │
+│   │               │                         │                     │   │
+│   │               └─────────────┬───────────┘                     │   │
+│   │                             │                                 │   │
+│   │                             ▼                                 │   │
+│   │                     ┌─────────────┐                          │   │
+│   │                     │   merge     │                          │   │
+│   │                     │             │                          │   │
+│   │                     │  %x = φ [%x.then, %then],            │   │
+│   │                     │         [%x.else, %else]             │   │
+│   │                     └─────────────┘                          │   │
+│   │                                                               │   │
+│   └───────────────────────────────────────────────────────────────┘   │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-## 5.5 Generating LLVM IR from AST
+---
 
-Now let's build a complete LLVM IR generator from our AST.
+## 5.6 Generating LLVM IR from AST
 
-### 5.5.1 IR Generator Header
+### 5.6.1 Complete IR Generator
 
 ```cpp
-// LLVMIRGenerator.h
-#ifndef LLVMIRGENERATOR_H
-#define LLVMIRGENERATOR_H
+// llvm_ir_generator.h
+// LLVM IR generation from AST
 
-#include "AST.h"
-#include "SymbolTable.h"
+#ifndef LLVM_IR_GENERATOR_H
+#define LLVM_IR_GENERATOR_H
+
+#include "parser.h"
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Module.h>
+#include <llvm/IR/Verifier.h>
 #include <memory>
 
 class LLVMIRGenerator {
@@ -292,90 +569,100 @@ public:
     LLVMIRGenerator();
     std::unique_ptr<llvm::Module> generate(std::unique_ptr<Program>& program);
     
-    // Type mapping
-    llvm::Type* mapType(const std::string& typeStr);
+    // Visitor methods
+    void visit(Program* node);
+    void visit(FunctionDecl* node);
+    void visit(VarDecl* node);
+    void visit(CompoundStmt* node);
+    void visit(IfStmt* node);
+    void visit(WhileStmt* node);
+    void visit(ForStmt* node);
+    void visit(ReturnStmt* node);
+    void visit(ExpressionStmt* node);
     
+    llvm::Value* visitExpr(Expr* node);
+    llvm::Value* visitExpr(IntegerLiteral* node);
+    llvm::Value* visitExpr(FloatLiteral* node);
+    llvm::Value* visitExpr(Identifier* node);
+    llvm::Value* visitExpr(BinaryExpr* node);
+    llvm::Value* visitExpr(UnaryExpr* node);
+    llvm::Value* visitExpr(CallExpr* node);
+    
+    llvm::Type* mapType(const std::string& typeName);
+
 private:
-    std::unique_ptr<llvm::LLVMContext> context;
-    std::unique_ptr<llvm::Module> module;
-    std::unique_ptr<llvm::IRBuilder<>> builder;
-    SymbolTable symbolTable;
+    std::unique_ptr<llvm::LLVMContext> context_;
+    std::unique_ptr<llvm::Module> module_;
+    std::unique_ptr<llvm::IRBuilder<>> builder_;
     
-    // Current function context
-    llvm::Function* currentFunction;
+    llvm::Function* currentFunction_;
+    std::unordered_map<std::string, llvm::Value*> namedValues_;
     
-    // Value mapping (AST -> LLVM values)
-    std::unordered_map<std::string, llvm::Value*> namedValues;
-    
-    // Generate functions
-    llvm::Function* generateFunction(FunctionDeclaration* node);
-    void generateVarDecl(VarDeclaration* node);
-    void generateCompoundStmt(CompoundStmt* node);
-    void generateSelectionStmt(SelectionStmt* node);
-    void generateIterationStmt(IterationStmt* node);
-    void generateReturnStmt(ReturnStmt* node);
-    void generateExpressionStmt(ExpressionStmt* node);
-    
-    // Expression generation
-    llvm::Value* generateExpr(Expr* node);
-    llvm::Value* generateIntegerLiteral(IntegerLiteral* node);
-    llvm::Value* generateFloatLiteral(FloatLiteral* node);
-    llvm::Value* generateIdentifier(Identifier* node);
-    llvm::Value* generateBinaryExpr(BinaryExpr* node);
-    llvm::Value* generateCallExpr(CallExpr* node);
-    
-    // Helper
-    llvm::BasicBlock* createBasicBlock(const std::string& name);
+    llvm::BasicBlock* createBlock(const std::string& name);
+    llvm::Value* getVariableValue(const std::string& name);
+    void setVariableValue(const std::string& name, llvm::Value* value);
 };
 
-#endif // LLVMIRGENERATOR_H
+#endif // LLVM_IR_GENERATOR_H
 ```
 
-### 5.5.2 IR Generator Implementation
-
 ```cpp
-// LLVMIRGenerator.cpp
-#include "LLVMIRGenerator.h"
+// llvm_ir_generator.cpp
+// Implementation of LLVM IR generation
+
+#include "llvm_ir_generator.h"
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_ostream.h>
+#include <iostream>
 
 using namespace llvm;
 
 LLVMIRGenerator::LLVMIRGenerator() {
-    context = std::make_unique<LLVMContext>();
-    module = std::make_unique<Module>("my_module", *context);
-    builder = std::make_unique<IRBuilder<>>(*context);
+    context_ = std::make_unique<LLVMContext>();
+    module_ = std::make_unique<Module>("jit_module", *context_);
+    builder_ = std::make_unique<IRBuilder<>>(*context_);
 }
 
 std::unique_ptr<Module> LLVMIRGenerator::generate(std::unique_ptr<Program>& program) {
     // Process all declarations
     for (auto& decl : program->declarations) {
-        if (auto* func = dynamic_cast<FunctionDeclaration*>(decl.get())) {
-            generateFunction(func);
-        } else if (auto* var = dynamic_cast<VarDeclaration*>(decl.get())) {
-            generateVarDecl(var);
+        if (auto* func = dynamic_cast<FunctionDecl*>(decl.get())) {
+            visit(func);
+        } else if (auto* var = dynamic_cast<VarDecl*>(decl.get())) {
+            visit(var);
         }
     }
     
     // Verify module
-    if (verifyModule(*module, &errs())) {
+    if (verifyModule(*module_, &errs())) {
         errs() << "Module verification failed!\n";
     }
     
-    return std::move(module);
+    return std::move(module_);
 }
 
-Type* LLVMIRGenerator::mapType(const std::string& typeStr) {
-    if (typeStr == "int") return builder->getInt32Ty();
-    if (typeStr == "float") return builder->getFloatTy();
-    if (typeStr == "void") return builder->getVoidTy();
-    if (typeStr == "char") return builder->getInt8Ty();
-    if (typeStr == "double") return builder->getDoubleTy();
+Type* LLVMIRGenerator::mapType(const std::string& typeName) {
+    if (typeName == "int") return builder_->getInt32Ty();
+    if (typeName == "float") return builder_->getFloatTy();
+    if (typeName == "double") return builder_->getDoubleTy();
+    if (typeName == "char") return builder_->getInt8Ty();
+    if (typeName == "void") return builder_->getVoidTy();
+    if (typeName == "bool") return builder_->getInt1Ty();
     
-    return builder->getInt32Ty();  // Default
+    return builder_->getInt32Ty();  // Default
 }
 
-Function* LLVMIRGenerator::generateFunction(FunctionDeclaration* node) {
+void LLVMIRGenerator::visit(Program* node) {
+    for (auto& decl : node->declarations) {
+        if (auto* func = dynamic_cast<FunctionDecl*>(decl.get())) {
+            visit(func);
+        } else if (auto* var = dynamic_cast<VarDecl*>(decl.get())) {
+            visit(var);
+        }
+    }
+}
+
+void LLVMIRGenerator::visit(FunctionDecl* node) {
     // Create function type
     std::vector<Type*> paramTypes;
     for (auto& param : node->params) {
@@ -385,7 +672,7 @@ Function* LLVMIRGenerator::generateFunction(FunctionDeclaration* node) {
     FunctionType* funcType = FunctionType::get(
         mapType(node->returnType),
         paramTypes,
-        false  // Not vararg
+        false
     );
     
     // Create function
@@ -393,35 +680,37 @@ Function* LLVMIRGenerator::generateFunction(FunctionDeclaration* node) {
         funcType,
         Function::ExternalLinkage,
         node->name,
-        module.get()
+        module_.get()
     );
     
-    // Set names for arguments
+    // Name arguments
     auto argIt = func->arg_begin();
     for (auto& param : node->params) {
         argIt->setName(param.second);
+        namedValues_[param.second] = argIt;
         ++argIt;
     }
     
-    // Save current context
-    Function* oldFunction = currentFunction;
-    currentFunction = func;
+    // Save context
+    Function* prevFunc = currentFunction_;
+    currentFunction_ = func;
     
     // Create entry block
-    BasicBlock* entry = BasicBlock::Create(*context, "entry", func);
-    builder->SetInsertPoint(entry);
-    
-    // Clear named values and add function arguments
-    namedValues.clear();
-    argIt = func->arg_begin();
-    for (auto& param : node->params) {
-        namedValues[param.second] = argIt;
-        ++argIt;
-    }
+    BasicBlock* entry = BasicBlock::Create(*context_, "entry", func);
+    builder_->SetInsertPoint(entry);
     
     // Generate body
     if (node->body) {
-        generateCompoundStmt(node->body.get());
+        visit(node->body.get());
+    }
+    
+    // If no return, add one
+    if (builder_->GetInsertBlock()->getTerminator() == nullptr) {
+        if (node->returnType == "void") {
+            builder_->CreateRetVoid();
+        } else {
+            builder_->CreateRet(Constant::getNullValue(mapType(node->returnType)));
+        }
     }
     
     // Verify function
@@ -430,490 +719,441 @@ Function* LLVMIRGenerator::generateFunction(FunctionDeclaration* node) {
     }
     
     // Restore context
-    currentFunction = oldFunction;
+    currentFunction_ = prevFunc;
+    namedValues_.clear();
     
-    return func;
+    // Re-add function arguments
+    for (auto& param : node->params) {
+        namedValues_[param.second] = func->getValueSymbolTable()->lookup(param.second);
+    }
 }
 
-void LLVMIRGenerator::generateVarDecl(VarDeclaration* node) {
+void LLVMIRGenerator::visit(VarDecl* node) {
     Type* varType = mapType(node->type);
     
-    // For simplicity, we create global variables
-    GlobalVariable* gv = new GlobalVariable(
-        *module,
-        varType,
-        false,  // Not constant
-        GlobalValue::ExternalLinkage,
-        nullptr,  // No initializer
-        node->name
-    );
-    
-    // Also add to symbol table
-    symbolTable.insert(node->name, std::make_shared<Symbol>(
-        node->name, SymbolKind::VARIABLE, mapType(node->type), 0, 0
-    ), 0);
-}
-
-void LLVMIRGenerator::generateCompoundStmt(CompoundStmt* node) {
-    // Handle declarations
-    for (auto& decl : node->declarations) {
-        if (auto* varDecl = dynamic_cast<VarDeclaration*>(decl.get())) {
-            generateVarDecl(varDecl);
-        }
+    if (node->arraySize > 0) {
+        varType = ArrayType::get(varType, node->arraySize);
     }
     
-    // Handle statements
+    // Create alloca in entry block
+    BasicBlock* entry = &currentFunction_->getEntryBlock();
+    builder_->SetInsertPoint(&entry->back());
+    
+    AllocaInst* alloca = builder_->CreateAlloca(varType, nullptr, node->name);
+    setVariableValue(node->name, alloca);
+    
+    // Initialize to zero
+    builder_->CreateStore(Constant::getNullValue(varType), alloca);
+}
+
+void LLVMIRGenerator::visit(CompoundStmt* node) {
     for (auto& stmt : node->statements) {
         if (auto* exprStmt = dynamic_cast<ExpressionStmt*>(stmt.get())) {
-            generateExpressionStmt(exprStmt);
-        } else if (auto* selStmt = dynamic_cast<SelectionStmt*>(stmt.get())) {
-            generateSelectionStmt(selStmt);
-        } else if (auto* iterStmt = dynamic_cast<IterationStmt*>(stmt.get())) {
-            generateIterationStmt(iterStmt);
+            visit(exprStmt);
+        } else if (auto* ifStmt = dynamic_cast<IfStmt*>(stmt.get())) {
+            visit(ifStmt);
+        } else if (auto* whileStmt = dynamic_cast<WhileStmt*>(stmt.get())) {
+            visit(whileStmt);
+        } else if (auto* forStmt = dynamic_cast<ForStmt*>(stmt.get())) {
+            visit(forStmt);
         } else if (auto* retStmt = dynamic_cast<ReturnStmt*>(stmt.get())) {
-            generateReturnStmt(retStmt);
+            visit(retStmt);
         }
     }
 }
 
-void LLVMIRGenerator::generateSelectionStmt(SelectionStmt* node) {
-    Function* func = builder->GetInsertBlock()->getParent();
+void LLVMIRGenerator::visit(IfStmt* node) {
+    // Generate condition
+    Value* cond = visitExpr(node->condition.get());
     
     // Create blocks
-    BasicBlock* thenBlock = createBasicBlock("if.then");
-    BasicBlock* elseBlock = node->elseBranch ? createBasicBlock("if.else") : nullptr;
-    BasicBlock* mergeBlock = createBasicBlock("if.end");
+    BasicBlock* thenBlock = createBlock("if.then");
+    BasicBlock* elseBlock = node->elseBranch ? createBlock("if.else") : nullptr;
+    BasicBlock* mergeBlock = createBlock("if.end");
     
-    // Generate condition
-    Value* cond = generateExpr(node->condition.get());
-    
-    // Branch based on condition
+    // Conditional branch
     if (elseBlock) {
-        builder->CreateCondBr(cond, thenBlock, elseBlock);
+        builder_->CreateCondBr(cond, thenBlock, elseBlock);
     } else {
-        builder->CreateCondBr(cond, thenBlock, mergeBlock);
+        builder_->CreateCondBr(cond, thenBlock, mergeBlock);
     }
     
     // Generate then block
-    builder->SetInsertPoint(thenBlock);
-    generateStmt(node->thenBranch.get());
-    builder->CreateBr(mergeBlock);
+    builder_->SetInsertPoint(thenBlock);
+    visit(node->thenBranch.get());
+    if (!builder_->GetInsertBlock()->getTerminator()) {
+        builder_->CreateBr(mergeBlock);
+    }
     
     // Generate else block
     if (elseBlock) {
-        builder->SetInsertPoint(elseBlock);
-        generateStmt(node->elseBranch.get());
-        builder->CreateBr(mergeBlock);
+        builder_->SetInsertPoint(elseBlock);
+        visit(node->elseBranch.get());
+        if (!builder_->GetInsertBlock()->getTerminator()) {
+            builder_->CreateBr(mergeBlock);
+        }
     }
     
     // Continue at merge block
-    builder->SetInsertPoint(mergeBlock);
+    builder_->SetInsertPoint(mergeBlock);
 }
 
-void LLVMIRGenerator::generateIterationStmt(IterationStmt* node) {
-    Function* func = builder->GetInsertBlock()->getParent();
-    
+void LLVMIRGenerator::visit(WhileStmt* node) {
     // Create blocks
-    BasicBlock* loopBlock = createBasicBlock("while.loop");
-    BasicBlock* bodyBlock = createBasicBlock("while.body");
-    BasicBlock* endBlock = createBasicBlock("while.end");
+    BasicBlock* loopCond = createBlock("while.cond");
+    BasicBlock* loopBody = createBlock("while.body");
+    BasicBlock* loopEnd = createBlock("while.end");
     
-    // Branch to loop condition
-    builder->CreateBr(loopBlock);
+    // Jump to condition
+    builder_->CreateBr(loopCond);
     
     // Generate condition
-    builder->SetInsertPoint(loopBlock);
-    Value* cond = generateExpr(node->condition.get());
-    builder->CreateCondBr(cond, bodyBlock, endBlock);
+    builder_->SetInsertPoint(loopCond);
+    Value* cond = visitExpr(node->condition.get());
+    builder_->CreateCondBr(cond, loopBody, loopEnd);
     
     // Generate body
-    builder->SetInsertPoint(bodyBlock);
-    generateStmt(node->body.get());
-    builder->CreateBr(loopBlock);
+    builder_->SetInsertPoint(loopBody);
+    visit(node->body.get());
+    if (!builder_->GetInsertBlock()->getTerminator()) {
+        builder_->CreateBr(loopCond);
+    }
     
-    // Continue at end block
-    builder->SetInsertPoint(endBlock);
+    // Continue at end
+    builder_->SetInsertPoint(loopEnd);
 }
 
-void LLVMIRGenerator::generateReturnStmt(ReturnStmt* node) {
+void LLVMIRGenerator::visit(ReturnStmt* node) {
     if (node->expr) {
-        Value* retVal = generateExpr(node->expr.get());
-        builder->CreateRet(retVal);
+        Value* retVal = visitExpr(node->expr.get());
+        builder_->CreateRet(retVal);
     } else {
-        builder->CreateRetVoid();
+        builder_->CreateRetVoid();
     }
 }
 
-void LLVMIRGenerator::generateExpressionStmt(ExpressionStmt* node) {
+void LLVMIRGenerator::visit(ExpressionStmt* node) {
     if (node->expr) {
-        generateExpr(node->expr.get());
+        visitExpr(node->expr.get());
     }
 }
 
-Value* LLVMIRGenerator::generateIntegerLiteral(IntegerLiteral* node) {
-    return builder->getInt32(node->value);
-}
+// ============================================================================
+// EXPRESSION GENERATION
+// ============================================================================
 
-Value* LLVMIRGenerator::generateFloatLiteral(FloatLiteral* node) {
-    return ConstantFP::get(*context, APFloat(node->value));
-}
-
-Value* LLVMIRGenerator::generateIdentifier(Identifier* node) {
-    // Look up in named values
-    auto it = namedValues.find(node->name);
-    if (it != namedValues.end()) {
-        return it->second;
+Value* LLVMIRGenerator::visitExpr(Expr* node) {
+    switch (node->type) {
+        case ExprType::INTEGER_LITERAL:
+            return visitExpr(static_cast<IntegerLiteral*>(node));
+        case ExprType::FLOAT_LITERAL:
+            return visitExpr(static_cast<FloatLiteral*>(node));
+        case ExprType::IDENTIFIER:
+            return visitExpr(static_cast<Identifier*>(node));
+        case ExprType::BINARY:
+            return visitExpr(static_cast<BinaryExpr*>(node));
+        case ExprType::UNARY:
+            return visitExpr(static_cast<UnaryExpr*>(node));
+        case ExprType::CALL:
+            return visitExpr(static_cast<CallExpr*>(node));
+        default:
+            return builder_->getInt32(0);
     }
+}
+
+Value* LLVMIRGenerator::visitExpr(IntegerLiteral* node) {
+    return builder_->getInt32(node->value);
+}
+
+Value* LLVMIRGenerator::visitExpr(FloatLiteral* node) {
+    return ConstantFP::get(*context_, APFloat(node->value));
+}
+
+Value* LLVMIRGenerator::visitExpr(Identifier* node) {
+    return getVariableValue(node->name);
+}
+
+Value* LLVMIRGenerator::visitExpr(BinaryExpr* node) {
+    Value* left = visitExpr(node->left.get());
+    Value* right = visitExpr(node->right.get());
     
-    // Look up global variable
-    GlobalVariable* gv = module->getGlobalVariable(node->name);
-    if (gv) {
-        return builder->CreateLoad(gv->getValueType(), gv, node->name);
-    }
-    
-    errs() << "Unknown variable: " << node->name << "\n";
-    return builder->getInt32(0);
-}
-
-Value* LLVMIRGenerator::generateBinaryExpr(BinaryExpr* node) {
-    Value* left = generateExpr(node->left.get());
-    Value* right = generateExpr(node->right.get());
+    bool isFloat = left->getType()->isFloatTy() || 
+                   right->getType()->isFloatTy();
     
     switch (node->op) {
-        case OpType::ADD:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateAdd(left, right, "addtmp");
-            } else {
-                return builder->CreateFAdd(left, right, "addtmp");
-            }
-            
-        case OpType::SUB:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateSub(left, right, "subtmp");
-            } else {
-                return builder->CreateFSub(left, right, "subtmp");
-            }
-            
-        case OpType::MUL:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateMul(left, right, "multmp");
-            } else {
-                return builder->CreateFMul(left, right, "multmp");
-            }
-            
-        case OpType::DIV:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateSDiv(left, right, "divtmp");
-            } else {
-                return builder->CreateFDiv(left, right, "divtmp");
-            }
-            
-        case OpType::LT:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateICmpSLT(left, right, "cmptmp");
-            } else {
-                return builder->CreateFCmpOLT(left, right, "cmptmp");
-            }
-            
-        case OpType::GT:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateICmpSGT(left, right, "cmptmp");
-            } else {
-                return builder->CreateFCmpOGT(left, right, "cmptmp");
-            }
-            
-        case OpType::EQ:
-            if (left->getType()->isIntegerTy()) {
-                return builder->CreateICmpEQ(left, right, "cmptmp");
-            } else {
-                return builder->CreateFCmpOEQ(left, right, "cmptmp");
-            }
-            
-        case OpType::ASSIGN:
+        case BinaryOp::ADD:
+            return isFloat ? builder_->CreateFAdd(left, right, "fadd") 
+                          : builder_->CreateAdd(left, right, "add");
+        case BinaryOp::SUB:
+            return isFloat ? builder_->CreateFSub(left, right, "fsub") 
+                          : builder_->CreateSub(left, right, "sub");
+        case BinaryOp::MUL:
+            return isFloat ? builder_->CreateFMul(left, right, "fmul") 
+                          : builder_->CreateMul(left, right, "mul");
+        case BinaryOp::DIV:
+            return isFloat ? builder_->CreateFDiv(left, right, "fdiv") 
+                          : builder_->CreateSDiv(left, right, "sdiv");
+        case BinaryOp::MOD:
+            return builder_->CreateSRem(left, right, "srem");
+        case BinaryOp::LT:
+            return isFloat ? builder_->CreateFCmpOLT(left, right, "flt") 
+                          : builder_->CreateICmpSLT(left, right, "lt");
+        case BinaryOp::GT:
+            return isFloat ? builder_->CreateFCmpOGT(left, right, "fgt") 
+                          : builder_->CreateICmpSGT(left, right, "gt");
+        case BinaryOp::LE:
+            return isFloat ? builder_->CreateFCmpOLE(left, right, "fle") 
+                          : builder_->CreateICmpSLE(left, right, "le");
+        case BinaryOp::GE:
+            return isFloat ? builder_->CreateFCmpOGE(left, right, "fge") 
+                          : builder_->CreateICmpSGE(left, right, "ge");
+        case BinaryOp::EQ:
+            return isFloat ? builder_->CreateFCmpOEQ(left, right, "feq") 
+                          : builder_->CreateICmpEQ(left, right, "eq");
+        case BinaryOp::NE:
+            return isFloat ? builder_->CreateFCmpONE(left, right, "fne") 
+                          : builder_->CreateICmpNE(left, right, "ne");
+        case BinaryOp::AND:
+            return builder_->CreateAnd(left, right, "and");
+        case BinaryOp::OR:
+            return builder_->CreateOr(left, right, "or");
+        case BinaryOp::ASSIGN: {
             // Handle assignment
             if (auto* ident = dynamic_cast<Identifier*>(node->left.get())) {
-                auto it = namedValues.find(ident->name);
-                if (it != namedValues.end()) {
-                    builder->CreateStore(right, it->second);
-                    return right;
-                }
+                Value* ptr = getVariableValue(ident->name);
+                builder_->CreateStore(right, ptr);
             }
             return right;
-            
+        }
         default:
-            errs() << "Unsupported binary operator\n";
             return left;
     }
 }
 
-Value* LLVMIRGenerator::generateCallExpr(CallExpr* node) {
-    Function* callee = module->getFunction(node->callee);
+Value* LLVMIRGenerator::visitExpr(CallExpr* node) {
+    Function* callee = module_->getFunction(node->callee);
     if (!callee) {
         errs() << "Unknown function: " << node->callee << "\n";
-        return builder->getInt32(0);
+        return builder_->getInt32(0);
     }
     
     std::vector<Value*> args;
     for (auto& arg : node->args) {
-        args.push_back(generateExpr(arg.get()));
+        args.push_back(visitExpr(arg.get()));
     }
     
-    return builder->CreateCall(callee, args, "calltmp");
+    return builder_->CreateCall(callee, args, "call");
 }
 
-Value* LLVMIRGenerator::generateExpr(Expr* node) {
-    switch (node->type) {
-        case ExprType::INTEGER_LITERAL:
-            return generateIntegerLiteral(static_cast<IntegerLiteral*>(node));
-        case ExprType::FLOAT_LITERAL:
-            return generateFloatLiteral(static_cast<FloatLiteral*>(node));
-        case ExprType::IDENTIFIER:
-            return generateIdentifier(static_cast<Identifier*>(node));
-        case ExprType::BINARY:
-            return generateBinaryExpr(static_cast<BinaryExpr*>(node));
-        case ExprType::CALL:
-            return generateCallExpr(static_cast<CallExpr*>(node));
-        default:
-            return builder->getInt32(0);
-    }
+// ============================================================================
+// HELPER METHODS
+// ============================================================================
+
+BasicBlock* LLVMIRGenerator::createBlock(const std::string& name) {
+    return BasicBlock::Create(*context_, name, currentFunction_);
 }
 
-BasicBlock* LLVMIRGenerator::createBasicBlock(const std::string& name) {
-    return BasicBlock::Create(*context, name, currentFunction);
-}
-
-void LLVMIRGenerator::generateStmt(Stmt* stmt) {
-    if (auto* exprStmt = dynamic_cast<ExpressionStmt*>(stmt)) {
-        generateExpressionStmt(exprStmt);
-    } else if (auto* compStmt = dynamic_cast<CompoundStmt*>(stmt)) {
-        generateCompoundStmt(compStmt);
-    } else if (auto* selStmt = dynamic_cast<SelectionStmt*>(stmt)) {
-        generateSelectionStmt(selStmt);
-    } else if (auto* iterStmt = dynamic_cast<IterationStmt*>(stmt)) {
-        generateIterationStmt(iterStmt);
-    } else if (auto* retStmt = dynamic_cast<ReturnStmt*>(stmt)) {
-        generateReturnStmt(retStmt);
-    }
-}
-```
-
-## 5.6 Working with LLVM IR
-
-### 5.6.1 Viewing Generated IR
-
-```bash
-# After generating IR programmatically, print to file
-module->print(outs(), nullptr);
-
-# Parse IR from file
-clang -S -emit-llvm -O2 source.c -o source.ll
-cat source.ll
-```
-
-### 5.6.2 Optimization with opt
-
-```bash
-# Run optimization passes
-opt -S -O2 module.ll -o optimized.ll
-
-# Run specific passes
-opt -S -passes=instcombine module.ll -o simplified.ll
-opt -S -passes='gvn,mem2reg,dce' module.ll -o optimized.ll
-
-# View available passes
-opt --help
-
-# Print optimization remarks
-opt -S -O2 -Rpass=.* module.ll -o /dev/null
-```
-
-### 5.6.3 Bitcode Operations
-
-```bash
-# Assemble .ll to .bc
-llvm-as module.ll -o module.bc
-
-# Disassemble .bc to .ll
-llvm-dis module.bc -o module.ll
-
-# Link multiple .bc files
-llvm-link module1.bc module2.bc -o combined.bc
-```
-
-## 5.7 Advanced IR Features
-
-### 5.7.1 Intrinsic Functions
-
-LLVM provides built-in intrinsic functions:
-
-```llvm
-; Memory intrinsics
-%ptr = call i8* @llvm.memset.p0i8.i64(i8* %dest, i8 0, i64 %size, i1 false)
-call i8* @llvm.memcpy.p0i8.p0i8.i64(i8* %dst, i8* %src, i64 %size, i1 false)
-
-; Conversion intrinsics
-%float_val = call float @llvm.convert.to.fp32(i32 %int_val)
-
-; Debug intrinsics
-call void @llvm.dbg.declare(metadata %Point* %ptr, metadata !DIExpression())
-```
-
-### 5.7.2 Metadata
-
-```llvm
-; Debug information
-!0 = distinct !DICompileUnit(file: !1, language: DW_LANG_C99, ...)
-!1 = !{!"test.c"}
-
-; Optimization remarks
-!2 = !{!"function", !"main", !1}
-call void @llvm.experimental.die(i8* getelementptr...) #0, !dbg !2
-
-; Custom metadata
-!my.markers = !{!3, !4}
-!3 = !{!"branch_weight", i32 1000}
-!4 = !{!"branch_weight", i32 1}
-```
-
-### 5.7.3 Inline Assembly
-
-```llvm
-; Inline assembly in LLVM IR
-%result = call i64 @llvm.inline.asm(
-    i64 asm sideeffect "addq %rbx, $0", "=r,r",
-    i64 %a, i64 %b
-)
-```
-
-## 5.8 Building a Complete Compiler Frontend
-
-Let's put together a complete frontend pipeline:
-
-```cpp
-// main.cpp - Complete frontend pipeline
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include "Lexer.h"
-#include "Parser.h"
-#include "SemanticAnalyzer.h"
-#include "LLVMIRGenerator.h"
-
-int main(int argc, char** argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <source-file>" << std::endl;
-        return 1;
+Value* LLVMIRGenerator::getVariableValue(const std::string& name) {
+    auto it = namedValues_.find(name);
+    if (it != namedValues_.end()) {
+        // If it's a pointer, load the value
+        if (isa<AllocaInst>(it->second)) {
+            return builder_->CreateLoad(it->second->getType()->getPointerElementType(),
+                                        it->second, name);
+        }
+        return it->second;
     }
     
-    // Read source file
-    std::ifstream file(argv[1]);
-    if (!file.is_open()) {
-        std::cerr << "Cannot open file: " << argv[1] << std::endl;
-        return 1;
+    // Check for function arguments
+    if (currentFunction_) {
+        for (auto& arg : currentFunction_->args()) {
+            if (arg.getName() == name) {
+                return &arg;
+            }
+        }
     }
     
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    std::string source = buffer.str();
-    
-    // Stage 1: Lexical Analysis
-    std::cout << "=== Stage 1: Lexical Analysis ===" << std::endl;
-    Lexer lexer(source);
-    std::vector<Token> tokens = lexer.tokenize();
-    std::cout << "Produced " << tokens.size() << " tokens" << std::endl;
-    
-    // Stage 2: Syntax Analysis
-    std::cout << "\n=== Stage 2: Syntax Analysis ===" << std::endl;
-    Parser parser(tokens);
-    std::unique_ptr<Program> ast = parser.parse();
-    std::cout << "Parsing completed" << std::endl;
-    
-    // Stage 3: Semantic Analysis
-    std::cout << "\n=== Stage 3: Semantic Analysis ===" << std::endl;
-    SemanticAnalyzer analyzer;
-    analyzer.analyze(ast);
-    std::cout << "Semantic analysis completed" << std::endl;
-    
-    // Stage 4: IR Generation
-    std::cout << "\n=== Stage 4: IR Generation ===" << std::endl;
-    LLVMIRGenerator irGenerator;
-    std::unique_ptr<llvm::Module> module = irGenerator.generate(ast);
-    
-    // Print generated IR
-    std::cout << "\n=== Generated LLVM IR ===" << std::endl;
-    module->print(llvm::outs(), nullptr);
-    
-    // Write IR to file
-    std::string outputName = std::string(argv[1]) + ".ll";
-    std::error_code ec;
-    llvm::raw_fd_ostream out(outputName, ec);
-    module->print(out, nullptr);
-    std::cout << "\nIR written to: " << outputName << std::endl;
-    
-    return 0;
+    errs() << "Unknown variable: " << name << "\n";
+    return builder_->getInt32(0);
+}
+
+void LLVMIRGenerator::setVariableValue(const std::string& name, Value* value) {
+    namedValues_[name] = value;
 }
 ```
-
-## Summary
-
-This chapter covered LLVM IR in depth:
-
-1. **IR Design**: Typed, RISC-like, SSA-based intermediate representation
-2. **Type System**: Primitive and aggregate types
-3. **Instructions**: Binary, comparison, memory, and control flow operations
-4. **SSA and Phi Nodes**: Handling control flow merges
-5. **IR Generation**: Building LLVM IR from AST
-6. **LLVM C++ API**: Using Module, IRBuilder, and other core classes
-7. **Advanced Features**: Intrinsics, metadata, inline assembly
-
-LLVM IR serves as the universal representation between language frontends and optimization/code generation backends.
 
 ---
 
-## Exercises
+## 5.7 Working with LLVM IR
 
-### Exercise 5.1: LLVM IR Exploration
-Write several C functions and compile them to LLVM IR at different optimization levels. Observe how the IR changes:
-1. -O0 (no optimization)
-2. -O1 (basic optimization)
-3. -O2 (standard optimization)
-4. -O3 (aggressive optimization)
+### 5.7.1 LLVM Tool Usage
 
-### Exercise 5.2: Manual IR Writing
-Write the following functions directly in LLVM IR:
-1. A function that computes the GCD of two integers
-2. A function that finds the maximum element in an array
-3. A recursive Fibonacci function
+```bash
+# Assemble .ll to .bc
+llvm-as hello.ll -o hello.bc
 
-Compile and run your IR using `llc`.
+# Disassemble .bc to .ll
+llvm-dis hello.bc -o hello.ll
 
-### Exercise 5.3: Extend the IR Generator
-Extend the LLVMIRGenerator to support:
-1. Local variable allocation (stack slots)
-2. Floating-point literals
-3. Comparison operators (==, !=, <=, >=)
+# Link multiple .bc files
+llvm-link file1.bc file2.bc -o combined.bc
 
-### Exercise 5.4: Control Flow
-Generate LLVM IR for:
-1. A for loop
-2. A do-while loop
-3. A switch statement
-4. Break and continue statements
+# Compile IR to native assembly
+llc -O2 hello.ll -o hello.s
 
-### Exercise 5.5: Function Calls
-Implement function call generation:
-1. Support calling functions with multiple arguments
-2. Handle function return values
-3. Support external function declarations (libc functions)
+# Compile IR to object file
+llc -O2 -filetype=obj hello.ll -o hello.o
 
-### Exercise 5.6: Optimization Analysis
-Use LLVM tools to analyze optimizations:
-1. Run `opt -debug-pass=Structure` to see pass structure
-2. Use `opt -stats` to count transformations
-3. Use `opt -print-after-all` to see IR at each pass
+# Execute IR directly (interpreter)
+lli hello.bc
+```
 
-### Exercise 5.7: SSA Construction
-Research SSA construction algorithms. Implement phi node insertion for the IR generator when handling if-else statements.
+### 5.7.2 Optimization with opt
+
+```bash
+# Standard optimization (-O2 equivalent)
+opt -S -O2 hello.ll -o hello_opt.ll
+
+# Run specific passes
+opt -S -passes=instcombine hello.ll -o hello_opt.ll
+opt -S -passes='gvn,dce' hello.ll -o hello_opt.ll
+
+# View available passes
+opt --help | grep -A5 'Passes:'
+
+# Statistics
+opt -S -stats hello.ll 2>&1 | head -20
+```
+
+---
+
+## 5.8 Optimization with opt
+
+### 5.8.1 Common Optimization Passes
+
+```bash
+# Instruction combining
+opt -passes=instcombine hello.ll
+
+# Dead code elimination
+opt -passes=dce hello.ll
+
+# Dead store elimination
+opt -passes=dse hello.ll
+
+# Global value numbering (common subexpression elimination)
+opt -passes=gvn hello.ll
+
+# Sparse conditional constant propagation
+opt -passes=scp hello.ll
+
+# Function inlining
+opt -passes=inline hello.ll
+
+# Loop unrolling
+opt -passes=loop-unroll hello.ll
+
+# Loop vectorization
+opt -passes=loop-vectorize hello.ll
+
+# Combine multiple passes
+opt -passes='default<O2>' hello.ll
+
+# Custom pipeline
+opt -passes='mem2reg,instcombine,gvn,dce,simplifycfg' hello.ll
+```
+
+### 5.8.2 Optimization Effect Example
+
+```llvm
+; Before optimization
+define i32 @example(i32 %a, i32 %b) {
+entry:
+  %t1 = add i32 %a, 0      ; Redundant add
+  %t2 = add i32 %t1, 0      ; Redundant add
+  %t3 = mul i32 %t2, 1      ; Redundant multiply
+  ret i32 %t3
+}
+
+; After optimization (opt -O2)
+define i32 @example(i32 %a, i32 %b) {
+entry:
+  ret i32 %a
+}
+```
+
+---
+
+## 5.9 Summary
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                      CHAPTER 5 KEY POINTS                               │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ✅ LLVM IR is a typed, SSA-based intermediate representation        │
+│                                                                        │
+│  ✅ LLVM IR provides rich type system including primitives, arrays,   │
+│     structs, vectors, and functions                                   │
+│                                                                        │
+│  ✅ All LLVM instructions have at most three operands (3-address)   │
+│                                                                        │
+│  ✅ SSA form simplifies optimization; phi nodes handle CFG merges   │
+│                                                                        │
+│  ✅ LLVM C++ API enables programmatic IR generation                  │
+│                                                                        │
+│  ✅ opt tool provides comprehensive optimization passes               │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5.10 Exercises
+
+### Exercise 5.1: IR Generation ⭐⭐
+
+**Objective:** Generate LLVM IR for various constructs
+
+**Task:** Write a C++ program that generates LLVM IR for:
+1. A recursive factorial function
+2. An iterative sum function
+3. A function with if-else statements
+
+---
+
+### Exercise 5.2: Manual IR Writing ⭐⭐
+
+**Objective:** Write LLVM IR directly
+
+**Task:** Write the following in LLVM IR:
+1. GCD function
+2. String length function
+3. Fibonacci (recursive)
+
+Compile and run using `llc`.
+
+---
+
+### Exercise 5.3: Optimization Analysis ⭐⭐
+
+**Objective:** Analyze optimization effects
+
+**Task:** Write a function with optimization opportunities and observe:
+1. Dead code elimination
+2. Constant folding
+3. Common subexpression elimination
+
+---
+
+### Exercise 5.4: Phi Node Generation ⭐⭐⭐
+
+**Objective:** Handle control flow merges
+
+**Task:** Generate LLVM IR for:
+1. If-else returning values
+2. Loop with accumulation
+3. Case statement using switches
 
 ---
 
@@ -921,14 +1161,4 @@ Research SSA construction algorithms. Implement phi node insertion for the IR ge
 
 ---
 
-## References
-
-1. LLVM Language Reference Manual: https://llvm.org/docs/LangRef.html
-
-2. LLVM Programmer's Manual: https://llvm.org/docs/ProgrammersManual.html
-
-3. Lattner, C. (2002). LLVM: An Infrastructure for Multi-Stage Optimization. *Master's Thesis*.
-
-4. Appel, A. W. (1998). *Modern Compiler Implementation in ML*. Cambridge University Press.
-
-5. Cypher, R., & Ferrante, J. (1993). On the Linear-Generation of Three-Address Code. *Software Practice and Experience*.
+*Chapter 5 Complete*
