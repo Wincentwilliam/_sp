@@ -21,7 +21,7 @@
 
 ---
 
-## 📖 Table of Contents
+## Table of Contents
 
 | Chapter | Title | Description | Key Topics |
 |:-------:|-------|-------------|-----------|
@@ -37,7 +37,7 @@
 
 ---
 
-## 🎯 Overview
+## Overview
 
 This textbook provides a **comprehensive guide to compiler design and implementation**, with a practical focus on the **LLVM (Low Level Virtual Machine)** framework. Written for university students taking compiler courses, this book bridges the gap between theoretical compiler concepts and real-world implementation using industry-standard tools.
 
@@ -66,7 +66,7 @@ By completing this book, you will master:
 
 ---
 
-## 📚 Chapter Overview
+## Chapter Overview
 
 ### Chapter 1: Compiler Overview
 
@@ -172,7 +172,7 @@ Transform IR to machine code:
 
 ---
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 ### Required Knowledge
 
@@ -201,7 +201,7 @@ Transform IR to machine code:
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Installation
 
@@ -311,7 +311,7 @@ echo $?  # Should print 0
 
 ---
 
-## 📖 How to Use This Book
+## How to Use This Book
 
 ### Recommended Learning Path
 
@@ -369,7 +369,7 @@ Code Examples/
 
 ---
 
-## 📝 Chapter Exercises
+## Chapter Exercises
 
 Each chapter includes carefully designed exercises:
 
@@ -404,7 +404,7 @@ Each chapter includes carefully designed exercises:
 
 ---
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 讓 AI 教你編譯器/
@@ -451,7 +451,7 @@ Each chapter includes carefully designed exercises:
 
 ---
 
-## ❓ Frequently Asked Questions
+## Frequently Asked Questions
 
 ### General
 
@@ -485,7 +485,7 @@ Each chapter includes carefully designed exercises:
 
 ---
 
-## 🏆 Learning Outcomes
+## Learning Outcomes
 
 After completing this book, you will be able to:
 
@@ -518,7 +518,7 @@ After completing this book, you will be able to:
 
 ---
 
-## 📚 Additional Resources
+## Additional Resources
 
 ### In This Book
 
@@ -540,7 +540,7 @@ After completing this book, you will be able to:
 
 ---
 
-## 🤝 Contributing and Feedback
+## Contributing and Feedback
 
 This is an educational project created for a university compiler course. We welcome:
 
@@ -558,7 +558,7 @@ This is an educational project created for a university compiler course. We welc
 
 ---
 
-## 📄 License
+## License
 
 This work is intended for **educational purposes** in a university compiler course setting. You are welcome to:
 
@@ -570,7 +570,7 @@ Please attribute if you reference this work in your own materials.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 We thank:
 
@@ -584,7 +584,7 @@ We thank:
 
 <div align="center">
 
-**Happy Compiling! 🚀**
+**Happy Compiling!**
 
 *Last updated: April 2026*
 
