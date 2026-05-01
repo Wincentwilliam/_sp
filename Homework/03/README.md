@@ -1,4 +1,10 @@
+<div align="center">
+
 # Health & Fitness AI Assistant
+
+> **Built by: Claude Code and OpenCode**
+
+</div>
 
 A comprehensive, AI-powered health and fitness web application that provides personalized meal plans, exercise recommendations, nutritional analysis, and smart scheduling.
 
@@ -186,7 +192,7 @@ Frontend runs on http://localhost:5173
 ## Environment Variables
 
 ### Backend (.env)
-```env
+```
 PORT=5000
 NODE_ENV=development
 SUPABASE_URL=your_supabase_url
@@ -198,19 +204,19 @@ GROQ_API_KEY=your_groq_key
 ```
 
 ### Frontend (.env)
-```env
+```
 VITE_API_URL=http://localhost:5000/api
 ```
 
 ## Health Calculations
 
 ### BMR (Mifflin-St Jeor Equation)
-- **Male**: `10 × weight(kg) + 6.25 × height(cm) - 5 × age + 5`
-- **Female**: `10 × weight(kg) + 6.25 × height(cm) - 5 × age - 161`
+- **Male**: `10 x weight(kg) + 6.25 x height(cm) - 5 x age + 5`
+- **Female**: `10 x weight(kg) + 6.25 x height(cm) - 5 x age - 161`
 - **Other**: Average of male and female formulas
 
 ### Daily Calories
-`BMR × Activity Multiplier + Goal Adjustment`
+`BMR x Activity Multiplier + Goal Adjustment`
 
 | Activity Level | Multiplier |
 |---------------|------------|

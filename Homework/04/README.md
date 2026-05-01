@@ -1,6 +1,12 @@
+<div align="center">
+
 # 讓 AI 教你編譯器 -- 理論與實作（LLVM 版）
 
 ### Learn Compilers with AI -- Theory and Implementation (LLVM Edition)
+
+> **Built by: OpenCode (Student Documentation Work)**
+
+</div>
 
 ---
 
