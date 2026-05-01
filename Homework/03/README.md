@@ -2,7 +2,7 @@
 
 # Health & Fitness AI Assistant
 
-> **Built by: Claude Code and OpenCode**
+> **Built by: Gemini AI, Claude Code and OpenCode**
 
 </div>
 

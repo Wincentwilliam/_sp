@@ -167,7 +167,7 @@ The MiniLang VM supports the following bytecode instructions:
 
 </div>
 
-> **Built by: Claude Code and OpenCode**
+> **Built by: Gemini AI, Claude Code and OpenCode**
 
 ### Description
 A comprehensive, AI-powered health and fitness web application that provides personalized meal plans, exercise recommendations, nutritional analysis, and smart scheduling.
