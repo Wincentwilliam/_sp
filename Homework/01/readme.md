@@ -2,7 +2,7 @@
 
 # p0 Compiler Project - While Loop & Function Calls
 
-> **Built by: Opencode AI**
+> **Built by: Google AI Studio**
 
 </div>
 

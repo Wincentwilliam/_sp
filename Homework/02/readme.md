@@ -2,7 +2,7 @@
 
 # Homework 2 : MiniLang Compiler & VM
 
-> **Built by: Opencode AI**
+> **Built by: Gemini AI**
 
 </div>
 
